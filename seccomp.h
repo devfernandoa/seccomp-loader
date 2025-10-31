@@ -7,13 +7,15 @@
 
 #include <linux/filter.h>
 
+#define SC_SECCOMP_VERSION 1
+
 struct sc_seccomp_file_header {
 	char header[2];
 	uint8_t version;
-	uint8_t unrestricted;
+	uint8_t unrestricted;  // Must be 0 or 1
 
 	uint32_t len_filter;
-	uint8_t reserved2[16];
+	uint8_t reserved2[16];  // Reserved for future use, must be zero
 };
 
 void sc_must_read_filter_from_file(FILE *file, uint32_t len_bytes, struct sock_fprog *prog);

@@ -41,6 +41,31 @@ FILE* sc_must_read_and_validate_header_from_file(const char *profile_path, struc
 	if (num_read < sizeof(struct sc_seccomp_file_header)) {
 		die("short read on seccomp header: %zu", num_read);
 	}
+	if (hdr->header[0] != 'S' || hdr->header[1] != 'C') {
+		die("unexpected seccomp header: %x%x", hdr->header[0],  hdr->header[1]);
+	}
+	if (hdr->version != SC_SECCOMP_VERSION) {
+		die("unsupported seccomp version: %u (expected %u)", hdr->version, SC_SECCOMP_VERSION);
+	}
+	if (hdr->unrestricted > 1) {
+		die("invalid unrestricted field: %u (must be 0 or 1)", hdr->unrestricted);
+	}
+	// Validate reserved2 is all zeros
+	for (int i = 0; i < sizeof(hdr->reserved2); i++) {
+		if (hdr->reserved2[i] != 0) {
+			die("reserved field must be zero at byte %d", i);
+		}
+	}
+	if (hdr->len_filter == 0) {
+		die("seccomp filter cannot be empty");
+	}
+	if (hdr->len_filter % sizeof(struct sock_filter) != 0) {
+		die("seccomp filter length must be multiple of %zu, got %u", 
+		    sizeof(struct sock_filter), hdr->len_filter);
+	}
+	if (hdr->len_filter > MAX_BPF_SIZE) {
+		die("seccomp filter too large: %u", hdr->len_filter);
+	}
 	return file;
 }
 
@@ -53,9 +78,13 @@ void sc_must_read_filter_from_file(FILE *file, uint32_t len_bytes, struct sock_f
 	}
 	size_t num_read = fread(prog->filter, 1, len_bytes, file);
 	if (ferror(file)) {
+		free(prog->filter);
+		prog->filter = NULL;
 		die("cannot read filter");
 	}
 	if (num_read != len_bytes) {
+		free(prog->filter);
+		prog->filter = NULL;
 		die("short read for filter %zu != %i", num_read, len_bytes);
 	}
 }
